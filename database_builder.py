@@ -1,7 +1,11 @@
 from typing import List
 from langchain_core.documents.base import Document
+from openai.types import Embedding, CreateEmbeddingResponse
 
 import os
+import pandas as pd
+from openai import OpenAI
+from dotenv import load_dotenv
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
@@ -85,10 +89,20 @@ class DatabaseBuilder:
         chunks_filtered = [chunk for chunk in chunked_docs if len(chunk.page_content) >= self.min_text_length]
         return chunks_filtered
     
-    def embed_chunks(self, chunks: List[Document]):
+    def embed_chunks(self, chunks: List[Document]) -> List[Embedding]:
         """Embeds a list of text chunks using the specified embedding model {self.embedding_model}."""
-        raise NotImplementedError("This method is not implemented yet.")
+        load_dotenv()   # Load the OpenAI API key from the .env file
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Embed all chunks at once
+        chunks_as_strings = [chunk.page_content for chunk in chunks]
+        embedded_chunks : CreateEmbeddingResponse = client.embeddings.create(input=chunks_as_strings, model=self.embedding_model)
+        print(f"Total tokens used for Embeddings with {self.embedding_model}: {embedded_chunks.usage.prompt_tokens}")
+        return embedded_chunks.data
 
-    def add_to_database(self, chunks):
+    def add_to_database(self, embeddings: List[Embedding]):
         """Adds the given embedded text chunks to the database."""
-        raise NotImplementedError("This method is not implemented yet.")
+        # TODO: Move this to a database
+        # For now: Save embeddings to a CSV file in the embeddings folder
+        df = pd.DataFrame(embeddings)
+        df.to_csv(f"embeddings/{self.subject}.csv", index=False)
+        print(f"Embeddings saved to embeddings/{self.subject}.csv")
