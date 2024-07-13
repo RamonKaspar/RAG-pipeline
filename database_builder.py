@@ -5,7 +5,7 @@ import os
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.document_loaders import UnstructuredHTMLLoader
+from langchain_community.document_loaders import BSHTMLLoader
 
 class DatabaseBuilder:
     """Builds a database of embedded text chunks for a given subject, given a corpus of PDF and HTML documents."""
@@ -15,14 +15,14 @@ class DatabaseBuilder:
         TODO: Do the default values for chunk_size, overlap_size amd min_text_length make sense?
 
         Args:
-            subject (str): The subject for which the database is being built (e.g., math, physics).
+            subject (str): The subject for which the database is being built (e.g., math, physics). This must be the folder name containing the files.
             database (_type_): The database object to which the text chunks will be added.
             embedding_model (str, optional): The embedding model used. Defaults to "text-embedding-3-large".
             chunk_size (int, optional): The size of each text chunk (in characters). Defaults to 1000.
             overlap_size (int, optional): The size of the overlap between chunks (in characters) to ensure context. Defaults to 200.
             min_text_length (int, optional): The minimum length of text to consider as a chunk (in characters). Defaults to 50.
         """
-        possible_subjects = ['math', 'physics', 'chemistry']    # TODO: Update list with correct subjects
+        possible_subjects = ['math', 'physics', 'chemistry', 'test']    # TODO: Update list with correct subjects
         if subject not in possible_subjects:
             raise ValueError("Invalid subject. Must be one of" + str(possible_subjects))
         self.subject = subject
@@ -32,14 +32,18 @@ class DatabaseBuilder:
         self.overlap_size = overlap_size
         self.min_text_length = min_text_length
 
-    def build_database(self, folder_path: str):
+    def build_database(self, root_folder_path: str):
         """Builds a database of embedded text chunks from PDF files in a folder.
         NOTE: Only PDF files and HTML files are supported for now.
 
         Args:
-            folder_path (str): The path to the folder containing PDF files.
+            folder_path (str): The path to the root folder containing the data. The folder must contain subfolders for each subject.
             min_text_length (int, optional): The minimum length of text to consider as a chunk (in characters). Defaults to 50.
         """
+        folder_path = os.path.join(root_folder_path, self.subject)
+        if not os.path.exists(folder_path):
+            raise FileNotFoundError(f"Folder not found: {folder_path}")
+        
         docs : List[Document] = []
         for filename in os.listdir(folder_path):
             if filename.lower().endswith('.pdf') or filename.lower().endswith('.html'):
@@ -63,7 +67,7 @@ class DatabaseBuilder:
             loader = PyPDFLoader(file_path=path, extract_images=False)  # Extract text only. Maybe consider images as well?
         elif path.lower().endswith('.html'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/html/
-            loader = UnstructuredHTMLLoader(file_path=path)
+            loader = BSHTMLLoader(file_path=path, open_encoding="utf-8")
         return loader.load()
         
     def chunk_text(self, docs: List[Document]) -> List[Document]:
