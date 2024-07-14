@@ -53,7 +53,7 @@ class RetrievalPipeline:
     def load_embedded_data(self, subject: str) -> pd.DataFrame:
         """Loads the embedded data for the given subject."""
         # TODO: In the future, this method should load the embedded data from a database
-        if not os.path.exists(f"embeddings/{subject}.csv"):
+        if not os.path.exists(f"embedding_database/{subject}.csv"):
             raise FileNotFoundError(f"Embedded data not found for subject: {subject}")
-        df = pd.read_csv(f"embeddings/{subject}.csv")
+        df = pd.read_csv(f"embedding_database/{subject}.csv")
         return df
