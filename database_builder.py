@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from langchain_core.documents.base import Document
 from openai.types import Embedding, CreateEmbeddingResponse
 
@@ -6,10 +7,19 @@ import os
 import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
+from uuid import uuid4  # Generate unique IDs for each chunk
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import BSHTMLLoader
+
+# Structure the embedded chunk, i.e. a row in the database
+class EmbeddedChunks(BaseModel):
+    id: str
+    content: str
+    source: Optional[str] = None
+    embedding: List[float]
+    embedding_model: Optional[str] = None
 
 class DatabaseBuilder:
     """Builds a database of embedded text chunks for a given subject, given a corpus of PDF and HTML documents."""
@@ -58,8 +68,8 @@ class DatabaseBuilder:
         # Chunk the text
         chunks = self.chunk_text(docs)
         # Embed the docs and add them to the database
-        chunks_embedded = self.embed_chunks(chunks)
-        self.add_to_database(chunks_embedded)
+        embedded_chunks = self.embed_chunks(chunks)
+        self.add_to_database(embedded_chunks)
         print(f"Database built successfully for subject: {self.subject}")
 
     def extract_content(self, path: str) -> List[Document]:
@@ -85,11 +95,11 @@ class DatabaseBuilder:
             is_separator_regex=False,   # use default seperator list ["\n\n", "\n", " ", ""]
         )
         chunked_docs = text_splitter.split_documents(docs)
-        # Filter out chunks that are too short
+        # Optional: Filter out chunks that are too short
         chunks_filtered = [chunk for chunk in chunked_docs if len(chunk.page_content) >= self.min_text_length]
         return chunks_filtered
     
-    def embed_chunks(self, chunks: List[Document]) -> List[Embedding]:
+    def embed_chunks(self, chunks: List[Document]) -> List[EmbeddedChunks]:
         """Embeds a list of text chunks using the specified embedding model {self.embedding_model}."""
         load_dotenv()   # Load the OpenAI API key from the .env file
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -97,12 +107,24 @@ class DatabaseBuilder:
         chunks_as_strings = [chunk.page_content for chunk in chunks]
         embedded_chunks : CreateEmbeddingResponse = client.embeddings.create(input=chunks_as_strings, model=self.embedding_model)
         print(f"Total tokens used for Embeddings with {self.embedding_model}: {embedded_chunks.usage.prompt_tokens}")
-        return embedded_chunks.data
+        
+        # Combine the embedding with content and metadata
+        embedded_data : List[EmbeddedChunks] = []
+        for chunk, embedding in zip(chunks, embedded_chunks.data):
+            embedded_data.append(EmbeddedChunks(
+                id=str(uuid4()),    # Generate a unique ID for each chunk
+                content=chunk.page_content,
+                source=chunk.metadata.get("source", None),
+                embedding=embedding.embedding,
+                embedding_model=self.embedding_model
+            ))
+        return embedded_data
 
-    def add_to_database(self, embeddings: List[Embedding]):
+    def add_to_database(self, embedded_data: List[EmbeddedChunks]):
         """Adds the given embedded text chunks to the database."""
         # TODO: Move this to a database
-        # For now: Save embeddings to a CSV file in the embeddings folder
-        df = pd.DataFrame(embeddings)
-        df.to_csv(f"embeddings/{self.subject}.csv", index=False)
-        print(f"Embeddings saved to embeddings/{self.subject}.csv")
+        # For now: Save embedded chunks to a CSV file in the embedding_database folder
+        data_dicts = [chunk.model_dump() for chunk in embedded_data] # Convert Pydantic objects to dictionaries
+        df = pd.DataFrame(data_dicts)
+        df.to_csv(f"embedding_database/{self.subject}.csv", index=False)
+        print(f"Embeddings saved to embedding_database/{self.subject}.csv")

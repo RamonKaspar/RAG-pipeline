@@ -2,5 +2,6 @@ pypdf    # pdf to text
 langchain_text_splitters
 langchain-community
 openai
+huggingface_hub
 python-dotenv
 pandas
