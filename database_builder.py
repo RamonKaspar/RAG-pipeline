@@ -103,8 +103,7 @@ class DatabaseBuilder:
     
     def embed_chunks(self, chunks: List[Document]) -> List[EmbeddedChunks]:
         """Embeds a list of text chunks using the specified embedding model {self.embedding_model}."""
-        load_dotenv()   # Load the OpenAI API key from the .env file
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Load the OpenAI API key from the .env file
         # Embed all chunks at once
         chunks_as_strings = [chunk.page_content for chunk in chunks]
         embedded_chunks : CreateEmbeddingResponse = client.embeddings.create(input=chunks_as_strings, model=self.embedding_model)
