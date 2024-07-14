@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel
 from langchain_core.documents.base import Document
-from openai.types import Embedding, CreateEmbeddingResponse
+from openai.types import CreateEmbeddingResponse
 
 import os
 import pandas as pd
@@ -24,17 +24,17 @@ class EmbeddedChunks(BaseModel):
 class DatabaseBuilder:
     """Builds a database of embedded text chunks for a given subject, given a corpus of PDF and HTML documents."""
     
-    def __init__(self, subject: str, database, embedding_model: str = "text-embedding-3-large", chunk_size: int = 1000, overlap_size: int = 200, min_text_length: int = 50):
+    def __init__(self, subject: str, database, embedding_model: str = "text-embedding-3-large", chunk_size: int = 512, overlap_size: int = 64, min_text_length: int = 0):
         """Constructor for the DatabaseBuilder class.
-        TODO: Do the default values for chunk_size, overlap_size amd min_text_length make sense?
+        NOTE: We use the default values for chunk_size and overlap_size from here: https://arxiv.org/abs/2405.06681
 
         Args:
             subject (str): The subject for which the database is being built (e.g., math, physics). This must be the folder name containing the files.
             database (_type_): The database object to which the text chunks will be added.
             embedding_model (str, optional): The embedding model used. Defaults to "text-embedding-3-large".
-            chunk_size (int, optional): The size of each text chunk (in characters). Defaults to 1000.
-            overlap_size (int, optional): The size of the overlap between chunks (in characters) to ensure context. Defaults to 200.
-            min_text_length (int, optional): The minimum length of text to consider as a chunk (in characters). Defaults to 50.
+            chunk_size (int, optional): The size of each text chunk (in characters). Defaults to 512.
+            overlap_size (int, optional): The size of the overlap between chunks (in characters) to ensure context. Defaults to 64.
+            min_text_length (int, optional): The minimum length of text to consider as a chunk (in characters). Defaults to 0.
         """
         possible_subjects = ['math', 'physics', 'chemistry', 'test']    # TODO: Update list with correct subjects
         if subject not in possible_subjects:
