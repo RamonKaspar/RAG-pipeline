@@ -86,7 +86,9 @@ class DatabaseBuilder:
         
     def chunk_text(self, docs: List[Document]) -> List[Document]:
         """Chunks the given documents into smaller pieces of a specified size {self.chunk_size} with an overlap {self.overlap_size}.
-        Filters out chunks that are too short (less than {self.min_text_length} characters)."""
+        Filters out chunks that are too short (less than {self.min_text_length} characters).
+        TODO: Semantic chunking should be considered in the future.
+        """
         # Doc: https://python.langchain.com/v0.2/docs/how_to/recursive_text_splitter/
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
