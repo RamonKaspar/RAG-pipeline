@@ -2,19 +2,34 @@
 
 A pipeline for building a Retrieval-Augmented Generation (RAG) system using document embedding.
 
-We use two stages in the pipeline:
+We use three stages in the pipeline:
 
-- **(1) Preprocessing**: Extract text from documents and embed text chunks.
-- **(2) RAG-pipeline**: Use the embedded text chunks to build a RAG system.
+- **(1) Collect Data**: Preprocess a corpus of PDF and HTML documents to build a database of embedded text chunks for a specified subject.
+- **(2) Preprocessing**: Extract text from documents and embed text chunks.
+- **(3) RAG-pipeline**: Use the embedded text chunks to build a RAG system.
 
-## (1) Preprocessing: Database Builder for RAG-Pipeline
+## (1) Collect Data: Data Collection for RAG-Pipeline
+
+Manually place the PDF and HTML documents in the `data/{subject}` folder. The folder structure should look like this:
+
+```bash
+data/
+└── subject/
+    ├── document1.pdf
+    ├── document2.html
+    └── ...
+```
+
+Note: Use meaningful document names for the PDF and HTML files, since the document name is used as source information in the RAG system (so we can reference the actual document later).
+
+## (2) Preprocessing: Database Builder for RAG-Pipeline
 
 The module, `database_builder.py`, preprocesses a corpus of PDF and HTML documents to build a database of embedded text chunks for a specified subject. This is part of the initial preprocessing step in the RAG pipeline.
 
 - Extracts text from PDF and HTML documents, located in `data/{subject}` folder.
 - Chunks text into manageable pieces with specified size and overlap.
 - Embeds text chunks using the specified embedding model (e.g. `text-embedding-3-large` from OpenAI).
-- Saves embedded chunks to a CSV file located in `embeddings/{subject}.csv` for further use. Note: This should be moved to an actual database in the future.
+- Saves embedded chunks to a CSV file located in `embedding_database/{subject}.csv` for further use. Note: This should be moved to an actual database in the future.
 
 ### Usage
 
@@ -40,10 +55,13 @@ db_builder.build_database(root_folder_path="data/")
 
 ### ToDo's
 
-- [] Determine the optimal values for `chunk_size`, `overlap_size`, and `min_text_length`.
-- [] Implement a database to store the embedded text chunks.
-- [] Support other file types in addition to PDF and HTML?
+- [ ] Determine the optimal values for `chunk_size`, `overlap_size`, and `min_text_length`. Many different values are used in research papers.
+- [ ] Implement a database to store the embedded text chunks. For now, we save the embedded chunks to a CSV file.
+- [ ] Support other file types in addition to PDF and HTML?
+- [ ] Which embedding model to use? We currently use the `text-embedding-3-large` model from OpenAI.
+- [ ] Measure the latency of the embedding process.
+- [ ] Consider semantic chunking stratgies instead of the `RecursiveTextSplitter`.
 
-## (2) RAG-pipeline
+## (3) RAG-pipeline
 
 Blabla
