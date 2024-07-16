@@ -25,7 +25,7 @@ def main():
     )
     
     # Uncomment the following line to rebuild the database if necessary
-    # db_builder.build_database(root_folder_path="data/")
+    db_builder.build_database(root_folder_path="data/")
     
     # Initialize the RAG pipeline
     pipeline = RAGPipeline(db_builder)

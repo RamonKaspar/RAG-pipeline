@@ -117,30 +117,30 @@ class DatabaseBuilder:
         # Embed all chunks at once
         chunks_as_strings = [chunk.page_content for chunk in chunks]
 
-        # Assert that all chunks are strings
-        assert all(isinstance(chunk, str) for chunk in chunks_as_strings), "All chunks must be strings."
-
         print("Finished creating chunks")
 
         # Get the number of tokens used for the embeddings
-        tokenizer = tiktoken.encoding_for_model("text-embedding-3-large")
+        tokenizer = tiktoken.encoding_for_model(self.embedding_model)
         numTokens = 0
+        embedded_chunks = []
         for chunk in chunks_as_strings:
             numTokens += len(tokenizer.encode(chunk))
+            assert len(tokenizer.encode(chunk)) <= 8191, "The total number of tokens for a chunk exceeds the limit of 8191 tokens. Use a smaller chunk size."
 
-        splits = numTokens // 1000000
+        # Split the chunks into batches of 1 million tokens each
+        splits = numTokens // 100000
         batched_chunks = np.array_split(chunks_as_strings, splits) if splits > 0 else [chunks_as_strings]
 
         embedded_chunks = []
-        for batch in batched_chunks:
-            embedded_chunks = embedded_chunks + client.embeddings.create(input=batch, model=self.embedding_model)
-            time.sleep(60)
+        for i, batch in enumerate(batched_chunks):
+            print(f"Embedding batch {i+1}/{len(batched_chunks)}")
+            embedded_chunks.extend(client.embeddings.create(input=batch, model=self.embedding_model).data)
         
-        print(f"Total tokens used for Embeddings with {self.embedding_model}: {embedded_chunks.usage.prompt_tokens}")
+        print(f"Total tokens used for Embeddings with {self.embedding_model}: {numTokens}")
         
         # Combine the embedding with content and metadata
         embedded_data : List[EmbeddedChunks] = []
-        for chunk, embedding in zip(chunks, embedded_chunks.data):
+        for chunk, embedding in zip(chunks, embedded_chunks):
             embedded_data.append(EmbeddedChunks(
                 id=str(uuid4()),    # Generate a unique ID for each chunk
                 content=chunk.page_content,
@@ -155,6 +155,20 @@ class DatabaseBuilder:
         # TODO: Move this to a database
         # For now: Save embedded chunks to a CSV file in the embedding_database folder
         data_dicts = [chunk.model_dump() for chunk in embedded_data] # Convert Pydantic objects to dictionaries
-        df = pd.DataFrame(data_dicts)
-        df.to_csv(f"embedding_database/{self.subject}.csv", index=False)
-        print(f"Embeddings saved to embedding_database/{self.subject}.csv")
+        new_df = pd.DataFrame(data_dicts)
+
+        # Define the file path
+        file_path = f"embedding_database/{self.subject}.csv"
+
+        if os.path.exists(file_path):
+            # If the file exists, read the existing data
+            existing_df = pd.read_csv(file_path)
+            # Append the new data to the existing data
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+        else:
+            # If the file does not exist, use the new data as is
+            combined_df = new_df
+
+        # Save the combined data to the CSV file
+        combined_df.to_csv(file_path, index=False)
+        print(f"Embeddings saved to {file_path}")
