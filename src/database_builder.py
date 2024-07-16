@@ -1,4 +1,7 @@
+# -*- coding: utf-8 -*-
+import time
 from typing import List, Optional
+import numpy as np
 from pydantic import BaseModel
 from langchain_core.documents.base import Document
 from openai.types import CreateEmbeddingResponse
@@ -8,6 +11,7 @@ import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
 from uuid import uuid4  # Generate unique IDs for each chunk
+import tiktoken
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
@@ -111,17 +115,27 @@ class DatabaseBuilder:
         """Embeds a list of text chunks using the specified embedding model {self.embedding_model}."""
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Load the OpenAI API key from the .env file
         # Embed all chunks at once
-        chunks_as_strings = [chunk.page_content if isinstance(chunk.page_content, str) else "NaS" for chunk in chunks]
-
-        # Debugging step: Print the chunks to verify their content
-        for i, chunk in enumerate(chunks_as_strings):
-            if not isinstance(chunk, str):
-                print(f"Invalid chunk at index {i}: {chunk}")
+        chunks_as_strings = [chunk.page_content for chunk in chunks]
 
         # Assert that all chunks are strings
         assert all(isinstance(chunk, str) for chunk in chunks_as_strings), "All chunks must be strings."
 
-        embedded_chunks : CreateEmbeddingResponse = client.embeddings.create(input=chunks_as_strings, model=self.embedding_model)
+        print("Finished creating chunks")
+
+        # Get the number of tokens used for the embeddings
+        tokenizer = tiktoken.encoding_for_model("text-embedding-3-large")
+        numTokens = 0
+        for chunk in chunks_as_strings:
+            numTokens += len(tokenizer.encode(chunk))
+
+        splits = numTokens // 1000000
+        batched_chunks = np.array_split(chunks_as_strings, splits) if splits > 0 else [chunks_as_strings]
+
+        embedded_chunks = []
+        for batch in batched_chunks:
+            embedded_chunks = embedded_chunks + client.embeddings.create(input=batch, model=self.embedding_model)
+            time.sleep(60)
+        
         print(f"Total tokens used for Embeddings with {self.embedding_model}: {embedded_chunks.usage.prompt_tokens}")
         
         # Combine the embedding with content and metadata
