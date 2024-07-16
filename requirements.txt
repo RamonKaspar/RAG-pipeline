@@ -5,3 +5,6 @@ openai
 huggingface_hub
 python-dotenv
 pandas
+beautifulsoup4
+lxml
+

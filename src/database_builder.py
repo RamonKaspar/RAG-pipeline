@@ -65,6 +65,12 @@ class DatabaseBuilder:
                 docs = self.extract_content(file_path)
             else:
                 print(f"Unsupported file format: {filename}")
+
+        # Remove newlines and tabs from the text
+        for doc in docs:
+            doc.page_content = doc.page_content.replace("\n", " ").replace("\t", " ").replace("\xa0", " ")
+
+
         # Chunk the text
         chunks = self.chunk_text(docs)
         # Embed the docs and add them to the database
@@ -73,8 +79,7 @@ class DatabaseBuilder:
         print(f"Database built successfully for subject: {self.subject}")
 
     def extract_content(self, path: str) -> List[Document]:
-        """Extracts text from a given PDF file and chunks it into smaller pieces of a 
-        specified size {self.chunk_size} with an overlap {self.overlap_size}."""
+        """Extracts text from a given PDF file."""
         assert (path.lower().endswith('.pdf') or path.lower().endswith('.html')) and os.path.exists(path), "Invalid file path."
         if path.lower().endswith('.pdf'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/pdf/
@@ -82,6 +87,7 @@ class DatabaseBuilder:
         elif path.lower().endswith('.html'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/html/
             loader = BSHTMLLoader(file_path=path, open_encoding="utf-8")
+        print(f"Extracting content from: {path}")
         return loader.load()
         
     def chunk_text(self, docs: List[Document]) -> List[Document]:
@@ -105,7 +111,16 @@ class DatabaseBuilder:
         """Embeds a list of text chunks using the specified embedding model {self.embedding_model}."""
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Load the OpenAI API key from the .env file
         # Embed all chunks at once
-        chunks_as_strings = [chunk.page_content for chunk in chunks]
+        chunks_as_strings = [chunk.page_content if isinstance(chunk.page_content, str) else "NaS" for chunk in chunks]
+
+        # Debugging step: Print the chunks to verify their content
+        for i, chunk in enumerate(chunks_as_strings):
+            if not isinstance(chunk, str):
+                print(f"Invalid chunk at index {i}: {chunk}")
+
+        # Assert that all chunks are strings
+        assert all(isinstance(chunk, str) for chunk in chunks_as_strings), "All chunks must be strings."
+
         embedded_chunks : CreateEmbeddingResponse = client.embeddings.create(input=chunks_as_strings, model=self.embedding_model)
         print(f"Total tokens used for Embeddings with {self.embedding_model}: {embedded_chunks.usage.prompt_tokens}")
         

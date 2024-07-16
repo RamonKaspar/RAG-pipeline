@@ -1,3 +1,4 @@
 .env
 __pycache__/
 /llm_service/tokens_usage.json
+.venv/
