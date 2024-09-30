@@ -149,7 +149,7 @@ class DatabaseBuilder:
             embedded_data.append(EmbeddedChunks(
                 id=str(uuid4()),    # Generate a unique ID for each chunk
                 content=chunk.page_content,
-                source=chunk.metadata,
+                metadata=chunk.metadata,
                 embedding=embedding.embedding,
                 embedding_model=self.embedding_model
             ))
