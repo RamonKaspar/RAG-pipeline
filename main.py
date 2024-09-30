@@ -3,6 +3,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv(dotenv_path=".env", override=True)
 
+# Create an embedding service
+from util.embedding_service.embedding_service_factory import EmbeddingServiceFactory
+embedding_service = EmbeddingServiceFactory().get_embedding_service(provider="openai", model_name="text-embedding-3-large")
+
 """ 
 Preprocessing step: This step only needs to be done once for each subject.
 Example Usage of DatabaseBuilder class with the subject "test" and the embedding model "text-embedding-3-large". 
@@ -10,7 +14,7 @@ The data that is used has to be in the data/test folder.
 """
 from src.database_builder import DatabaseBuilder
 
-db_builder = DatabaseBuilder(subject="test", embedding_model="text-embedding-3-large", chunk_size=512, overlap_size=64, min_text_length=0, debug=True)
+db_builder = DatabaseBuilder(subject="test", embedding_service=embedding_service, chunk_size=512, overlap_size=64, min_text_length=0, debug=True)
 db_builder.build_database(root_folder_path="data/")
 
 
@@ -20,7 +24,7 @@ The database with the embeddings was created above.
 """
 from src.retriever import Retriever
 
-retriever = Retriever(subject="test", embedding_model="text-embedding-3-large", debug=True)
+retriever = Retriever(subject="test", embedding_service=embedding_service, debug=True)
 retrieved_data, tokens = retriever.retrieve(user_queries=["When is Albert Einstein's Birthday?"], top_k=5, threshold=0.2)
 
 
