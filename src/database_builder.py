@@ -1,7 +1,4 @@
-# -*- coding: utf-8 -*-
-import time
 from typing import List, Optional
-import numpy as np
 from pydantic import BaseModel
 from langchain_core.documents.base import Document
 from openai.types import CreateEmbeddingResponse
@@ -11,7 +8,6 @@ import pandas as pd
 from openai import OpenAI
 from dotenv import load_dotenv
 from uuid import uuid4  # Generate unique IDs for each chunk
-import tiktoken
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
@@ -69,12 +65,6 @@ class DatabaseBuilder:
                 docs = self.extract_content(file_path)
             else:
                 print(f"Unsupported file format: {filename}")
-
-        # Remove newlines and tabs from the text
-        for doc in docs:
-            doc.page_content = doc.page_content.replace("\n", " ").replace("\t", " ").replace("\xa0", " ")
-
-
         # Chunk the text
         chunks = self.chunk_text(docs)
         # Embed the docs and add them to the database
@@ -83,7 +73,8 @@ class DatabaseBuilder:
         print(f"Database built successfully for subject: {self.subject}")
 
     def extract_content(self, path: str) -> List[Document]:
-        """Extracts text from a given PDF file."""
+        """Extracts text from a given PDF file and chunks it into smaller pieces of a 
+        specified size {self.chunk_size} with an overlap {self.overlap_size}."""
         assert (path.lower().endswith('.pdf') or path.lower().endswith('.html')) and os.path.exists(path), "Invalid file path."
         if path.lower().endswith('.pdf'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/pdf/
@@ -91,7 +82,6 @@ class DatabaseBuilder:
         elif path.lower().endswith('.html'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/html/
             loader = BSHTMLLoader(file_path=path, open_encoding="utf-8")
-        print(f"Extracting content from: {path}")
         return loader.load()
         
     def chunk_text(self, docs: List[Document]) -> List[Document]:
@@ -116,31 +106,12 @@ class DatabaseBuilder:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Load the OpenAI API key from the .env file
         # Embed all chunks at once
         chunks_as_strings = [chunk.page_content for chunk in chunks]
-
-        print("Finished creating chunks")
-
-        # Get the number of tokens used for the embeddings
-        tokenizer = tiktoken.encoding_for_model(self.embedding_model)
-        numTokens = 0
-        embedded_chunks = []
-        for chunk in chunks_as_strings:
-            numTokens += len(tokenizer.encode(chunk))
-            assert len(tokenizer.encode(chunk)) <= 8191, "The total number of tokens for a chunk exceeds the limit of 8191 tokens. Use a smaller chunk size."
-
-        # Split the chunks into batches of 1 million tokens each
-        splits = numTokens // 100000
-        batched_chunks = np.array_split(chunks_as_strings, splits) if splits > 0 else [chunks_as_strings]
-
-        embedded_chunks = []
-        for i, batch in enumerate(batched_chunks):
-            print(f"Embedding batch {i+1}/{len(batched_chunks)}")
-            embedded_chunks.extend(client.embeddings.create(input=batch, model=self.embedding_model).data)
-        
-        print(f"Total tokens used for Embeddings with {self.embedding_model}: {numTokens}")
+        embedded_chunks : CreateEmbeddingResponse = client.embeddings.create(input=chunks_as_strings, model=self.embedding_model)
+        print(f"Total tokens used for Embeddings with {self.embedding_model}: {embedded_chunks.usage.prompt_tokens}")
         
         # Combine the embedding with content and metadata
         embedded_data : List[EmbeddedChunks] = []
-        for chunk, embedding in zip(chunks, embedded_chunks):
+        for chunk, embedding in zip(chunks, embedded_chunks.data):
             embedded_data.append(EmbeddedChunks(
                 id=str(uuid4()),    # Generate a unique ID for each chunk
                 content=chunk.page_content,
@@ -155,20 +126,6 @@ class DatabaseBuilder:
         # TODO: Move this to a database
         # For now: Save embedded chunks to a CSV file in the embedding_database folder
         data_dicts = [chunk.model_dump() for chunk in embedded_data] # Convert Pydantic objects to dictionaries
-        new_df = pd.DataFrame(data_dicts)
-
-        # Define the file path
-        file_path = f"embedding_database/{self.subject}.csv"
-
-        if os.path.exists(file_path):
-            # If the file exists, read the existing data
-            existing_df = pd.read_csv(file_path)
-            # Append the new data to the existing data
-            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
-        else:
-            # If the file does not exist, use the new data as is
-            combined_df = new_df
-
-        # Save the combined data to the CSV file
-        combined_df.to_csv(file_path, index=False)
-        print(f"Embeddings saved to {file_path}")
+        df = pd.DataFrame(data_dicts)
+        df.to_csv(f"embedding_database/{self.subject}.csv", index=False)
+        print(f"Embeddings saved to embedding_database/{self.subject}.csv")
