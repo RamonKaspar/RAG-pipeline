@@ -6,7 +6,8 @@ We use three stages in the pipeline:
 
 - **(1) Collect Data**: Preprocess a corpus of PDF and HTML documents to build a database of embedded text chunks for a specified subject.
 - **(2) Preprocessing**: Extract text from documents and embed text chunks.
-- **(3) RAG-pipeline**: Use the embedded text chunks to build a RAG system.
+- **(3) Retrieval**: Retrieve relevant information from the database using cosine similarity.
+- **(4) Generation**: Generate responses using the retrieved information with a large language model (LLM).
 
 ## (1) Collect Data: Data Collection for RAG-Pipeline
 
@@ -60,6 +61,46 @@ db_builder.build_database(root_folder_path="data/")
 - [ ] Which embedding model to use? We currently use the `text-embedding-3-large` model from OpenAI.
 - [ ] Consider semantic chunking stratgies instead of the `RecursiveTextSplitter`.
 
-## (3) RAG-pipeline
+## (3) Retrieval: Find Relevant Information
 
-In this stage, the embedded chunks will be used to query relevant information from the database, augmenting the generation of responses.
+In this stage, we retrieve relevant information from the embedded database using the user's query. The retrieval process involves:
+
+- **Embedding the User Query:** The query (or list of queries) is embedded using the same embedding model used to create the database.
+- **Computing Similarities:** We compute the cosine similarity between the query embeddings and the document embeddings in the database.
+- **Retrieving Top-K Documents:** The documents with the highest similarity scores above a specified threshold are retrieved.
+- **Thresholding:** We can set a threshold to filter out documents with low similarity scores.
+
+We support both single queries and lists of queries, which can be useful when you want to capture different aspects or phrasings of a question.
+
+### Usage
+
+```python
+from retriever import Retriever
+
+# Initialize the Retriever
+retriever = Retriever(
+    subject="test",  # Replace with actual subject (e.g., "biology")
+    embedding_model="text-embedding-3-large",  # Use the same model used in preprocessing
+    debug=False  # Set to True to enable debug information
+)
+
+# Query the database
+query = "What is the capital of France?"
+retrieved_docs, total_tokens = retriever.retrieve(
+    user_queries=[query],  # List of user queries
+    top_k=5,               # Number of top documents to retrieve
+    threshold=0.2          # Cosine similarity threshold
+)
+
+# Process the retrieved documents
+for idx, doc in enumerate(retrieved_docs):
+    print(f"\nDocument {idx + 1}")
+    print(f"Content: {doc.content}")
+    print(f"Metadata: {doc.metadata}")
+    print(f"Similarity: {doc.similarity:.4f}")
+
+```
+
+## (4) Generation: Generate Responses
+
+In this stage, we generate responses using the retrieved information from the database. We use a large language model (LLM) to generate responses based on the user's query and the retrieved documents.
