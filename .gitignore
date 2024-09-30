@@ -1,6 +1,6 @@
 .env
 __pycache__/
-/llm_service/tokens_usage.json
+util/llm_service/tokens_usage.json
 .venv/
 data/*
 embedding_database/*
