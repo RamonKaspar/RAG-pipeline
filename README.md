@@ -29,7 +29,7 @@ The module, `database_builder.py`, preprocesses a corpus of PDF and HTML documen
 - Extracts text from PDF and HTML documents, located in `data/{subject}` folder.
 - Chunks text into manageable pieces with specified size and overlap.
 - Embeds text chunks using the specified embedding model (e.g. `text-embedding-3-large` from OpenAI).
-- Saves embedded chunks to a CSV file located in `embedding_database/{subject}.csv` for further use. Note: This should be moved to an actual database in the future.
+- Saves embedded chunks to a Parquet file located in `embedding_database/{subject}.parquet` for further use. Note: This should be moved to an actual vector database in the future.
 
 ### Usage
 
@@ -42,7 +42,6 @@ from database_builder import DatabaseBuilder
 # Initialize the DatabaseBuilder
 db_builder = DatabaseBuilder(
     subject="test", # Replace with actual subject (e.g. "biology")
-    database=None,  # Replace with actual database object in the future
     embedding_model="text-embedding-3-large",   # or "text-embedding-3-small"
     chunk_size=1000,
     overlap_size=50,
@@ -56,12 +55,11 @@ db_builder.build_database(root_folder_path="data/")
 ### ToDo's
 
 - [ ] Determine the optimal values for `chunk_size`, `overlap_size`, and `min_text_length`. Many different values are used in research papers.
-- [ ] Implement a database to store the embedded text chunks. For now, we save the embedded chunks to a CSV file.
+- [ ] Implement a database to store the embedded text chunks. For now, we save the embedded chunks to a Parquet file.
 - [ ] Support other file types in addition to PDF and HTML?
 - [ ] Which embedding model to use? We currently use the `text-embedding-3-large` model from OpenAI.
-- [ ] Measure the latency of the embedding process.
 - [ ] Consider semantic chunking stratgies instead of the `RecursiveTextSplitter`.
 
 ## (3) RAG-pipeline
 
-Blabla
+In this stage, the embedded chunks will be used to query relevant information from the database, augmenting the generation of responses.
