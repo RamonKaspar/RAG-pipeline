@@ -2,17 +2,16 @@ from typing import List, Optional
 import numpy as np
 from pydantic import BaseModel
 from langchain_core.documents.base import Document
-from openai.types import Embedding
 
 import os
 import pandas as pd
-from openai import OpenAI
 from uuid import uuid4  # Generate unique IDs for each chunk
-import tiktoken
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.document_loaders import BSHTMLLoader
+
+from util.embedding_service.embedding_service import EmbeddingService
 
 # Structure the embedded chunk, i.e. a row in the database
 class EmbeddedChunks(BaseModel):
@@ -25,23 +24,20 @@ class EmbeddedChunks(BaseModel):
 class DatabaseBuilder:
     """Builds a database of embedded text chunks for a given subject, given a corpus of PDF and HTML documents."""
     
-    def __init__(self, subject: str, embedding_model: str = "text-embedding-3-large", chunk_size: int = 512, overlap_size: int = 64, min_text_length: int = 0, debug: bool = False):
+    def __init__(self, subject: str, embedding_service: EmbeddingService, chunk_size: int = 512, overlap_size: int = 64, min_text_length: int = 0, debug: bool = False):
         """Constructor for the DatabaseBuilder class.
         NOTE: We use the default values for chunk_size and overlap_size from here: https://arxiv.org/abs/2405.06681
 
         Args:
             subject (str): The subject for which the database is being built (e.g., math, physics). This must be the folder name containing the files.
-            embedding_model (str, optional): The embedding model used. Defaults to "text-embedding-3-large".
+            embedding_service (EmbeddingService): The embedding service to use for embedding the text chunks.
             chunk_size (int, optional): The size of each text chunk (in characters). Defaults to 512.
             overlap_size (int, optional): The size of the overlap between chunks (in characters) to ensure context. Defaults to 64.
             min_text_length (int, optional): The minimum length of text to consider as a chunk (in characters). Defaults to 0.
             debug (bool, optional): Whether to print debug information. Defaults to False.
         """
-        possible_subjects = ['math', 'physics', 'chemistry', 'test']    # TODO: Update list with correct subjects
-        if subject not in possible_subjects:
-            raise ValueError("Invalid subject. Must be one of" + str(possible_subjects))
         self.subject = subject
-        self.embedding_model = embedding_model
+        self.embedding_service = embedding_service
         if chunk_size < 1 or overlap_size < 1:
             raise ValueError("chunk_size and overlap_size must be greater than 0.")
         self.chunk_size = chunk_size
@@ -116,32 +112,29 @@ class DatabaseBuilder:
         return chunks_filtered
     
     def embed_chunks(self, chunks: List[Document]) -> List[EmbeddedChunks]:
-        """Embeds a list of text chunks using the specified embedding model {self.embedding_model}.
-        NOTE: For now, only the OpenAI API is supported for embeddings."""
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Load the OpenAI API key from the .env file
-        
+        """Embeds a list of text chunks using the specified embedding service."""
         # Embed all chunks at once
         chunks_as_strings = [chunk.page_content for chunk in chunks]
 
         # Get the number of tokens used for the embeddings
-        tokenizer = tiktoken.encoding_for_model(self.embedding_model)
         numTokens = 0
         embedded_chunks = []
         for chunk in chunks_as_strings:
-            numTokens += len(tokenizer.encode(chunk))
-            if len(tokenizer.encode(chunk)) > 8191: # Reference: https://platform.openai.com/docs/guides/embeddings/embedding-models
+            tokens = self.embedding_service.count_tokens(chunk)
+            numTokens += tokens
+            if tokens > 8191: # Reference: https://platform.openai.com/docs/guides/embeddings/embedding-models
                 raise ValueError("The total number of tokens for a chunk exceeds the limit of 8191 tokens. Use a smaller chunk size.")
             
         # Split the chunks into batches of 1 million tokens each
         splits = numTokens // 100000
         batched_chunks = np.array_split(chunks_as_strings, splits) if splits > 0 else [chunks_as_strings]
 
-        embedded_chunks : List[Embedding] = []
+        embedded_chunks : List[np.ndarray] = []
         for i, batch in enumerate(batched_chunks):
             if self.debug: print(f"Embedding batch {i+1}/{len(batched_chunks)}")
-            embedded_chunks.extend(client.embeddings.create(input=batch, model=self.embedding_model).data)
+            embedded_chunks.extend(self.embedding_service.get_embeddings(batch)[0])
         
-        if self.debug: print(f"Total tokens used for Embeddings with {self.embedding_model}: {numTokens}")
+        if self.debug: print(f"Total tokens used for Embeddings with {self.embedding_service.model_name}: {numTokens}")
         
         # Combine the embedding with content and metadata
         embedded_data : List[EmbeddedChunks] = []
@@ -150,8 +143,8 @@ class DatabaseBuilder:
                 id=str(uuid4()),    # Generate a unique ID for each chunk
                 content=chunk.page_content,
                 metadata=chunk.metadata,
-                embedding=embedding.embedding,
-                embedding_model=self.embedding_model
+                embedding=embedding.tolist(),
+                embedding_model=self.embedding_service.model_name
             ))
         return embedded_data
 

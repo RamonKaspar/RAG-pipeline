@@ -1,9 +1,10 @@
 from typing import List, Tuple, Optional
 import os
 import numpy as np
-from openai import OpenAI
 import pandas as pd
 from pydantic import BaseModel
+
+from util.embedding_service.embedding_service import EmbeddingService
 
 class RetrievedDocument(BaseModel):
     content: str
@@ -19,21 +20,17 @@ class Retriever:
     of embedded text snippets for a specific schhol subject. We use cosine similarity as the similarity metric.
     """
     
-    def __init__(self, subject: str, embedding_model: str = "text-embedding-3-large", debug: bool = False):
+    def __init__(self, subject: str, embedding_service: EmbeddingService, debug: bool = False):
         """Initializes the Retriever class with the given school subject and embedding model.
         NOTE: Use the same embedding model that was used to create the database!
         
         Args:
             subject (str): The school subject for which the pipeline is created.
-            embedding model (str): The embedding model used for the text data. Use the same model that was used to create the database.
+            embedding_service (EmbeddingService): The embedding service to use for embedding the text snippets.
             debug (bool): Whether to print debug information.
         """
-        # TODO: Add the possible subjects to the list
-        possible_subjects = ["test", "math", "physics", "chemistry"]
-        if subject not in possible_subjects:
-            raise ValueError(f"Invalid subject. Must be one of{possible_subjects}")
         self.subject = subject
-        self.embedding_model = embedding_model
+        self.embedding_service = embedding_service
         self.debug = debug
         
         # Load the embeddings and metadata into memory
@@ -55,7 +52,7 @@ class Retriever:
             int: The number of tokens used by the prompt embedding.
         """
         # Embedd the user queries
-        query_embeddings, total_tokens = self.get_embeddings(user_queries)
+        query_embeddings, total_tokens = self.embedding_service.get_embeddings(user_queries)
         query_embeddings = np.array(query_embeddings)
         
         # Calculate the cosine similarity between the query embeddings and the database embeddings.
@@ -72,7 +69,7 @@ class Retriever:
                 metadata=self.metadatas[idx],
                 similarity=max_similarities[idx],
                 similarity_function='cosine_similarity',
-                embedding_model=self.embedding_model
+                embedding_model=self.embedding_service.model_name
             )
             for idx in top_k_indices
         ]
@@ -87,11 +84,3 @@ class Retriever:
         
         df = pd.read_parquet(file_path)
         return df
-
-    def get_embeddings(self, queries: List[str]) -> Tuple[List[np.ndarray], int]:
-        """Gets the embeddings for a list of user queries using the OpenAI API."""
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.embeddings.create(input=queries, model=self.embedding_model)
-        embeddings = [np.array(res.embedding) for res in response.data]
-        total_tokens = response.usage.total_tokens
-        return embeddings, total_tokens
