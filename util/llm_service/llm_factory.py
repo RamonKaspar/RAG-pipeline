@@ -153,7 +153,7 @@ class LLMServiceFactory():
     This factory ensures that a single instance of an LLM service is created per unique set of parameters (model, provider, temperature, max_tokens).
     """
     _services = {}
-    _tokens_usage_file = "llm_service/tokens_usage.json"   # File to persistently store the accumulated tokens usage
+    _tokens_usage_file = "util/llm_service/tokens_usage.json"   # File to persistently store the accumulated tokens usage
     _lock = Lock()  # ensure thread safety
     
     SUPPORTED_MODELS = ["gpt-4o", "gpt-35-turbo", "gpt-35-turbo-16k", "HuggingFaceH4/zephyr-7b-beta", "mistralai/Mistral-7B-Instruct-v0.2", "codellama/CodeLlama-34b-Instruct-hf", "meta-llama/Meta-Llama-3-8B-Instruct", "microsoft/Phi-3-mini-4k-instruct", "mistralai/Mixtral-8x7B-Instruct-v0.1"]
