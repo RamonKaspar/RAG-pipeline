@@ -1,4 +1,4 @@
-from llm_service.llm_factory import LLMServiceFactory
+from util.llm_service.llm_factory import LLMServiceFactory
 from src.retriever import RetrievedDocument
 from typing import List, Tuple
 
