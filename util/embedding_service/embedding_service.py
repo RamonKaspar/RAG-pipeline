@@ -21,6 +21,8 @@ class EmbeddingService(ABC):
         count_tokens(text: str) -> int:
             Count the number of tokens in a text string using the appropriate tokenizer.
     """
+    def __init__(self, model_name: str):
+        self.model_name = model_name
 
     def get_embedding(self, text: str) -> np.ndarray:
         """

@@ -8,7 +8,7 @@ from util.embedding_service.embedding_service import EmbeddingService
 
 class AzureEmbeddingService(EmbeddingService):
     def __init__(self, model_name: str = "text-embedding-3-large"):
-        self.model_name = model_name
+        super().__init__(model_name=model_name)
         self.client  = AzureOpenAI(
             api_key = os.getenv("AZURE_OPENAI_API_KEY"),  
             api_version = "2024-06-01",
