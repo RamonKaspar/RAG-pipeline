@@ -1,85 +1,97 @@
-from typing import List
-
+from typing import List, Tuple, Optional
 import os
 import numpy as np
 from openai import OpenAI
 import pandas as pd
+from pydantic import BaseModel
 
-from dotenv import load_dotenv
+class RetrievedDocument(BaseModel):
+    content: str
+    metadata: Optional[dict] = None
+    similarity: float   
+    similarity_function: str
+    embedding_model: str
 
-load_dotenv(dotenv_path=".env", override=True)
 
 class Retriever:
-    def __init__(self, subject: str, embedding_model: str = "text-embedding-3-large"):
-        """Generates a pipeline for retrieving text snippets from resources of a specific school subject.
-
+    """
+    A class for retrieving suitable text snippets (given a user query) from a pre-built vector database
+    of embedded text snippets for a specific schhol subject. We use cosine similarity as the similarity metric.
+    """
+    
+    def __init__(self, subject: str, embedding_model: str = "text-embedding-3-large", debug: bool = False):
+        """Initializes the Retriever class with the given school subject and embedding model.
+        NOTE: Use the same embedding model that was used to create the database!
+        
         Args:
             subject (str): The school subject for which the pipeline is created.
-            embedding model (str): The embedding model used for the text data.
+            embedding model (str): The embedding model used for the text data. Use the same model that was used to create the database.
+            debug (bool): Whether to print debug information.
         """
-        possible_subjects = ['math', 'physics', 'chemistry']
+        # TODO: Add the possible subjects to the list
+        possible_subjects = ["test", "math", "physics", "chemistry"]
         if subject not in possible_subjects:
-            raise ValueError("Invalid subject. Must be one of" + str(possible_subjects))
+            raise ValueError(f"Invalid subject. Must be one of{possible_subjects}")
         self.subject = subject
         self.embedding_model = embedding_model
+        self.debug = debug
         
-        self.embedded_data = self.load_embedded_data(subject)   # pandas DataFrame containing the embedded data
+        # Load the embeddings and metadata into memory
+        self.embedded_data = self.load_embedded_data()  # Load Parquet file
+        self.embeddings_array = np.array(self.embedded_data['embedding'].to_list())
+        self.contents = self.embedded_data['content'].to_list()
+        self.metadatas = self.embedded_data['metadata'].to_list()
         
-
-    def retrieve(self, user_query: str, top_k: int, threshold: float) -> List[str]:
-        """Runs the pipeline for the RAG model. Returns the response retrieved by the model.
+    def retrieve(self, user_queries: List[str], top_k: int = 5, threshold: float = 0.15) -> Tuple[List[RetrievedDocument], int]:
+        """ Retrieve the top-K most relevant documents based on multiple user queries.
 
         Args:
-            user_query (str): The query for which we search for relevant information.
-            top_k (int): The number of snippets to retrieve.
-            threshold (float): The threshold for the similarity search in the retrieval.
+            user_queries (List[str]): The list of queries for which we search for relevant information.
+            top_k (int): The number of snippets to retrieve. Defaults to 5.
+            threshold (float): The threshold for the similarity search in the retrieval. Defaults to 0.15.
 
         Returns:
             List[str]: The list of snippets retrieved by the model.
+            int: The number of tokens used by the prompt embedding.
         """
+        # Embedd the user queries
+        query_embeddings, total_tokens = self.get_embeddings(user_queries)
+        query_embeddings = np.array(query_embeddings)
         
-        # Step 1: Retrieve Documents
-        retrieved_docs = self.retrieve_documents(user_query)
-        
-        # Step 2: Select most relevant Documents
-        selected_snippets = self.select_documents(retrieved_docs, top_k, threshold)
-        
-        assert len(selected_snippets) <= top_k   # Ensure that the number of snippets is less than or equal to the number of snippets requested
+        # Calculate the cosine similarity between the query embeddings and the database embeddings.
+        # We vectorize the cosine_similarity function to calculate the cosine similarity between each query embedding and all database embeddings.
+        # OpenAI embeddings are already normalized (https://platform.openai.com/docs/guides/embeddings/which-distance-function-should-i-use),
+        # so cosine similarity is just the dot product
+        similarities = np.dot(self.embeddings_array, query_embeddings.T)
+        max_similarities = np.max(similarities, axis=1)
+        indices = np.where(max_similarities >= threshold)[0]
+        top_k_indices = indices[np.argsort(-max_similarities[indices])][:top_k]
+        retrieved_docs = [
+            RetrievedDocument(
+                content=self.contents[idx],
+                metadata=self.metadatas[idx],
+                similarity=max_similarities[idx],
+                similarity_function='cosine_similarity',
+                embedding_model=self.embedding_model
+            )
+            for idx in top_k_indices
+        ]
+        return retrieved_docs, total_tokens
 
-        print(selected_snippets)
-        print(f"Retrieved {len(selected_snippets)} snippets.")
-        return selected_snippets
-    
-    def retrieve_documents(self, user_query: str) -> List[str]:
-        """Retrieves documents relevant to the user query."""
-        results = self.embedded_data.copy()
-        query_embedding = self.get_embedding(user_query)
-        results['similarity'] = self.embedded_data['embedding'].apply(lambda x: self.cosine_similarity(x, query_embedding))
-        return results[['content', 'similarity']]
+    def load_embedded_data(self) -> pd.DataFrame:
+        """Loads the embedded data from a Parquet file."""
+        # TODO: Load from the vector database in the future
+        file_path = f"embedding_database/{self.subject}.parquet"
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Embedded data not found for subject: {self.subject}")
         
-
-    def select_documents(self, retrieved_docs, top_k: int, threshold: float) -> List[str]:
-        """Selects the most relevant documents from the retrieved documents."""
-        filtered_docs = retrieved_docs[retrieved_docs['similarity'] >= threshold]
-        top_docs = filtered_docs.nlargest(top_k, 'similarity')
-        return top_docs['content'].tolist()
-    
-    
-    def load_embedded_data(self, subject: str) -> pd.DataFrame:
-        """Loads the embedded data for the given subject."""
-        # TODO: In the future, this method should load the embedded data from a database
-        if not os.path.exists(f"embedding_database/{subject}.csv"):
-            raise FileNotFoundError(f"Embedded data not found for subject: {subject}")
-        df = pd.read_csv(f"embedding_database/{subject}.csv")
-        df['embedding'] = df['embedding'].apply(eval).apply(np.array)
+        df = pd.read_parquet(file_path)
         return df
-    
-    def get_embedding(self, text: str) -> np.ndarray:
-        """Gets the embedding of the given text using the OpenAI API."""
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # Load the OpenAI API key from the .env file
-        response = client.embeddings.create(input=[text], model=self.embedding_model)
-        return np.array(response.data[0].embedding)
 
-    def cosine_similarity(self, a, b):
-        """Calculates the cosine similarity between two vectors."""
-        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    def get_embeddings(self, queries: List[str]) -> Tuple[List[np.ndarray], int]:
+        """Gets the embeddings for a list of user queries using the OpenAI API."""
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.embeddings.create(input=queries, model=self.embedding_model)
+        embeddings = [np.array(res.embedding) for res in response.data]
+        total_tokens = response.usage.total_tokens
+        return embeddings, total_tokens
