@@ -7,4 +7,6 @@ python-dotenv
 pandas
 beautifulsoup4
 lxml
-
+# For Parquet
+pyarrow
+fastparquet
