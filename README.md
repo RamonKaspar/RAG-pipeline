@@ -39,11 +39,15 @@ The module, `database_builder.py`, preprocesses a corpus of PDF and HTML documen
 
 ```python
 from database_builder import DatabaseBuilder
+from util.embedding_service.embedding_service_factory import EmbeddingServiceFactory
+
+# Create an embedding service
+embedding_service = EmbeddingServiceFactory().get_embedding_service(provider="openai", model_name="text-embedding-3-large")
 
 # Initialize the DatabaseBuilder
 db_builder = DatabaseBuilder(
     subject="test", # Replace with actual subject (e.g. "biology")
-    embedding_model="text-embedding-3-large",   # or "text-embedding-3-small"
+    embedding_service=embedding_service,
     chunk_size=1000,
     overlap_size=50,
     min_text_length=0
@@ -80,7 +84,7 @@ from retriever import Retriever
 # Initialize the Retriever
 retriever = Retriever(
     subject="test",  # Replace with actual subject (e.g., "biology")
-    embedding_model="text-embedding-3-large",  # Use the same model used in preprocessing
+    embedding_service=embedding_service,
     debug=False  # Set to True to enable debug information
 )
 
@@ -115,7 +119,7 @@ from retriever import Retriever
 # Assume we have already retrieved documents using the Retriever
 retriever = Retriever(
     subject="test",
-    embedding_model="text-embedding-ada-002"
+    embedding_service=embedding_service
 )
 user_query = "What is the capital of France?"
 retrieved_docs, _ = retriever.retrieve(
