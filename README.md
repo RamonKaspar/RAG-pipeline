@@ -103,4 +103,44 @@ for idx, doc in enumerate(retrieved_docs):
 
 ## (4) Generation: Generate Responses
 
-In this stage, we generate responses using the retrieved information from the database. We use a large language model (LLM) to generate responses based on the user's query and the retrieved documents.
+In this optional final stage, we generate a response to the user's query using the retrieved documents. The Generator class utilizes a language model to produce an answer that is informed by the retrieved chunks of information. We use a generic factory (LLMServiceFactory) to interact with different language models (LLMs) – for more details, see the `README.md` in the `llm_service` folder. \\
+This step is optional. If you only need to retrieve relevant chunks, you can omit this part.
+
+### Usage
+
+```python
+from generator import Generator
+from retriever import Retriever
+
+# Assume we have already retrieved documents using the Retriever
+retriever = Retriever(
+    subject="test",
+    embedding_model="text-embedding-ada-002"
+)
+user_query = "What is the capital of France?"
+retrieved_docs, _ = retriever.retrieve(
+    user_queries=[user_query],
+    top_k=5,
+    threshold=0.2
+)
+
+# Initialize the Generator
+generator = Generator(
+    model_provider="HuggingFace",
+    model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+    temperature=0.1,
+    max_tokens=2048
+)
+
+# Generate a response
+response = generator.generate_response(
+    user_query=user_query,
+    retrieved_data=retrieved_docs
+)
+
+# Output the generated response
+print("Generated Response:")
+print(response)
+```
+
+The retrieved documents are formatted and included in the prompt to provide context to the language model. You can customize the prompt in the `generate_response` method to better suit your use case or to optimize the model's output.
