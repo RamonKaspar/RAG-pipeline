@@ -22,7 +22,7 @@ class EmbeddedChunks(BaseModel):
     embedding_model: Optional[str] = None
 
 class DatabaseBuilder:
-    """Builds a database of embedded text chunks for a given subject, given a corpus of PDF and HTML documents."""
+    """Builds a database of embedded text chunks for a given subject, given a corpus of PDF, HTML and/or text documents."""
     
     def __init__(self, subject: str, embedding_service: EmbeddingService, chunk_size: int = 512, overlap_size: int = 64, min_text_length: int = 0, debug: bool = False):
         """Constructor for the DatabaseBuilder class.
@@ -46,7 +46,7 @@ class DatabaseBuilder:
         self.debug = debug
 
     def build_database(self, root_folder_path: str):
-        """Builds a database of embedded text chunks from PDF and HTML files in a folder.
+        """Builds a database of embedded text chunks from PDF, HTML and .txt files in a folder.
         NOTE: Only PDF files and HTML files are supported for now.
 
         Args:
@@ -59,12 +59,12 @@ class DatabaseBuilder:
         
         docs : List[Document] = []
         for filename in os.listdir(folder_path):
-            if filename.lower().endswith('.pdf') or filename.lower().endswith('.html'):
+            if filename.lower().endswith('.pdf') or filename.lower().endswith('.html') or filename.lower().endswith('.txt'):
                 if self.debug: print(f"Processing file: {filename}")
                 file_path = os.path.join(folder_path, filename)
                 docs = docs + self.extract_content(file_path)
             else:
-                raise ValueError(f"Unsupported file format: {folder_path}/{filename}. Only PDF and HTML files are supported.")
+                raise ValueError(f"Unsupported file format: {folder_path}/{filename}. Only PDF, HTML and txt files are supported.")
 
         # Remove newlines and tabs from the text, and encode it to utf-8
         for doc in docs:
@@ -83,14 +83,18 @@ class DatabaseBuilder:
         print(f"Database built successfully for subject: {self.subject}")
 
     def extract_content(self, path: str) -> List[Document]:
-        """Extracts text from a given PDF or HTML file."""
-        assert (path.lower().endswith('.pdf') or path.lower().endswith('.html')) and os.path.exists(path), "Invalid file path."
+        """Extracts text from a given PDF, HTML or txt file."""
+        assert (path.lower().endswith('.pdf') or path.lower().endswith('.html') or path.lower().endswith('.txt')) and os.path.exists(path), "Invalid file path."
         if path.lower().endswith('.pdf'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/pdf/
             loader = PyPDFLoader(file_path=path, extract_images=False)  # Extract text only. Maybe consider images as well?
         elif path.lower().endswith('.html'):
             # Doc: https://python.langchain.com/v0.1/docs/modules/data_connection/document_loaders/html/
             loader = BSHTMLLoader(file_path=path, open_encoding="utf-8")
+        elif path.lower().endswith('.txt'):
+            with open(path, 'r', encoding='utf-8') as file:
+                text = file.read()
+            return [Document(page_content=text, metadata={"source": "Klexikon", "path": path})]
         if self.debug: print(f"Extracting content from: {path}")
         return loader.load()
         

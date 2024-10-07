@@ -4,20 +4,21 @@ A pipeline for building a Retrieval-Augmented Generation (RAG) system using docu
 
 We use three stages in the pipeline:
 
-- **(1) Collect Data**: Preprocess a corpus of PDF and HTML documents to build a database of embedded text chunks for a specified subject.
+- **(1) Collect Data**: Preprocess a corpus of PDF, HTML and txt documents to build a database of embedded text chunks for a specified subject.
 - **(2) Preprocessing**: Extract text from documents and embed text chunks.
 - **(3) Retrieval**: Retrieve relevant information from the database using cosine similarity.
 - **(4) Generation**: Generate responses using the retrieved information with a large language model (LLM).
 
 ## (1) Collect Data: Data Collection for RAG-Pipeline
 
-Manually place the PDF and HTML documents in the `data/{subject}` folder. The folder structure should look like this:
+Manually place the PDF, HTML and/or txt documents in the `data/{subject}` folder. The folder structure should look like this:
 
 ```bash
 data/
 └── subject/
     ├── document1.pdf
     ├── document2.html
+    ├── document3.txt
     └── ...
 ```
 
@@ -61,9 +62,9 @@ db_builder.build_database(root_folder_path="data/")
 
 - [ ] Determine the optimal values for `chunk_size`, `overlap_size`, and `min_text_length`. Many different values are used in research papers.
 - [ ] Implement a database to store the embedded text chunks. For now, we save the embedded chunks to a Parquet file.
-- [ ] Support other file types in addition to PDF and HTML?
 - [ ] Which embedding model to use? We currently use the `text-embedding-3-large` model from OpenAI.
 - [ ] Consider semantic chunking stratgies instead of the `RecursiveTextSplitter`.
+- [ ] Add support for Batch embedding to save costs.
 
 ## (3) Retrieval: Find Relevant Information
 
